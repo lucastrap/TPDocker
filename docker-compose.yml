@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # 0. Base Image (Pour l'héritage)
+  # Ce service sert uniquement à construire l'image de base utilisée par le backup.
+  # Elle n'a pas besoin de tourner en permanence, donc on met un command qui exit tout de suite ou on l'utilise juste pour le build.
+  base_image:
+    build:
+      context: ./base_image
+      dockerfile: Dockerfile
+    image: my-base-image:latest
+    deploy:
+      replicas: 0 # Ce conteneur ne se lance pas, il sert juste à builder l'image
+
+  # 1. Base de données (PostgreSQL)
+  # Justification ressources : La DB est le composant le plus critique lourd en I/O et RAM pour le cache.
+  # On lui alloue le plus de ressources du stack.
+  db:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    container_name: tp_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - internal_net
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Backend (Node.js)
+  # Image custom construite depuis ./backend
+  # Justification ressources : Node.js est un runtime JS, il a besoin d'un heap correct mais est single-threaded.
+  # Moins gourmand que la DB, mais plus que le front statique.
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tp_backend
+    environment:
+      PORT: 3000
+      DB_HOST: db
+    networks:
+      - internal_net
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 3. Frontend (Nginx)
+  # Image custom construite depuis ./frontend
+  # Justification ressources : Nginx est extrêmement optimisé pour servir du statique.
+  # Très peu de mémoire et CPU nécessaires.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tp_frontend
+    ports:
+      - "8080:80"  # Seul port exposé à l'extérieur
+    networks:
+      - internal_net
+    depends_on:
+      backend:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # 4. Backup Service
+  # Image custom construite depuis ./backup_scripts
+  # HÉRITAGE : Cette image dépend de 'my-base-image:latest' construite par le service 'base_image'
+  # Rôle : Se connecte au réseau interne pour dump la DB, stocke sur un volume partagé
+  # Justification ressources : Tâche ponctuelle (cron), très peu de ressources passives.
+  backup:
+    build:
+      context: ./backup_scripts
+      dockerfile: Dockerfile
+    container_name: tp_backup
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: db
+    volumes:
+      - ./backups_on_host:/backup_data # Bind mount pour récupérer les fichiers sur le host
+    networks:
+      - internal_net
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 64M
+
+networks:
+  internal_net:
+    driver: bridge
+    # Le réseau est "interne" par défaut, seul le front expose un port host.
+
+volumes:
+  db_data:
