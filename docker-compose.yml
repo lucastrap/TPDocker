@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 0. Base Image (Pour l'héritage)
   # Ce service sert uniquement à construire l'image de base utilisée par le backup.

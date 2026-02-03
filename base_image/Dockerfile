@@ -1,7 +1,8 @@
 # Image de base partagée "Ops"
 # Elle contient les outils communs d'administration (Vim, Curl, Tar)
 # Cette image servira de socle pour l'image de backup
-FROM debian:bullseye-slim
+ARG DEBIAN_VERSION=bullseye-slim
+FROM debian:${DEBIAN_VERSION}
 
 # Explication des apt-get : 
 # - vim : pour éditer des fichiers directement dans n'importe quel conteneur qui hérite de celui-ci

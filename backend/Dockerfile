@@ -1,4 +1,5 @@
-FROM node:18-slim
+ARG NODE_VERSION=18-slim
+FROM node:${NODE_VERSION}
 
 WORKDIR /app
 

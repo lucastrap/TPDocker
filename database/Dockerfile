@@ -1,4 +1,5 @@
-FROM postgres:15
+ARG PG_VERSION=15
+FROM postgres:${PG_VERSION}
 
 # Mise à jour de la liste des paquets pour récupérer les dernières versions
 # Installation de 'vim' : Utile pour éditer les fichiers de configuration de PostgreSQL (pg_hba.conf, postgresql.conf) directement dans le conteneur pour le debugging.

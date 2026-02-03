@@ -10,6 +10,14 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Backend running on port ${port}`);
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
 });
