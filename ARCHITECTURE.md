@@ -50,16 +50,23 @@ Pour flexibiliser la construction, des arguments `ARG` ont �t� introduits da
 Chaque image a �t� enrichie avec des outils sp�cifiques pour l'administration et le debug, justifiant la n�cessit� de cr�er nos propres images.
 
 #### 1. Base Image & Backup Service
-*   **Base (Debian)** : Installation de `vim` (�dition de fichiers), `curl` (tests HTTP), et `tar` (compression).
-*   **Backup** : H�rite de la *Base Image*. Ajoute `postgresql-client` pour avoir l'outil `pg_dump` n�cessaire � l'extraction des donn�es.
-*   **Nettoyage** : Chaque instruction `RUN apt-get ...` est suivie d'un `rm -rf /var/lib/apt/lists/*` pour r�duire la taille finale de l'image en supprimant le cache apt.
+*   **Base (Debian)** : 
+    *   `vim` : Essentiel pour éditer des fichiers de configuration *in situ* lors de debugs d'urgence en production.
+    *   `curl` : Permet de tester les endpoints HTTP internes et la connectivité sortante.
+    *   `tar` : Utilisé pour compresser/décompresser les archives de logs ou de backups.
+*   **Backup** : Utilise `postgresql-client` spécifiquement pour la commande `pg_dump`, standard industriel pour les exports PostgreSQL.
+*   **Nettoyage OS** : La commande `rm -rf /var/lib/apt/lists/*` est cruciale pour alléger l'image finale. Elle supprime les index de paquets téléchargés qui ne sont plus nécessaires après l'installation, réduisant l'empreinte disque sur le registre et l'orchestrateur.
 
 #### 2. Backend (Node.js)
-*   **Outils ajout�s** : `curl` pour le Healthcheck, `iputils-ping` pour v�rifier la connectivit� r�seau avec la base de donn�es.
-*   **S�curit�** : Utilisation de l'image `slim` pour r�duire la surface d'attaque.
+*   **Outils ajoutés** :
+    *   `iputils-ping` : Indispensable pour diagnostiquer les problèmes de résolution DNS (`ping db`) ou de routage réseau interne entre les conteneurs.
+    *   `curl` : Utilisé par le *Healthcheck* Docker pour valider que l'API répond (200 OK) avant d'envoyer du trafic.
+*   **Sécurité** : Le choix de l'image `slim` évite d'embarquer des centaines de vulnérabilités potentielles présentes dans une image complète.
 
 #### 3. Frontend (Nginx) & Database
-*   **Outils ajout�s** : `vim` et `procps` (sur la DB pour `ps/top`) afin de monitorer les processus et �diter les configurations � chaud si n�cessaire lors du d�veloppement.
+*   **Outils ajoutés** : 
+    *   `procps` (sur la DB) : Fournit `ps` et `top`. Sans cela, il est impossible de surveiller la consommation mémoire réelle d'un processus PostgreSQL qui s'emballerait.
+    *   `vim` : Permet de modifier la configuration Nginx (`nginx.conf`) ou Postgres (`postgresql.conf`) pour tester des optimisations sans devoir reconstruire l'image à chaque essai (hot-debugging).
 
 ## 3. Configuration et Arguments au Run (ENV)
 
@@ -78,10 +85,16 @@ L'orchestration injecte des variables d'environnement pour configurer le comport
 Le fichier `docker-compose.yml` d�finit des contraintes strictes pour simuler un environnement Cloud r�aliste.
 
 ### Allocation des Ressources (Limits)
-*   **Database (512M / 1.0 CPU)** : Composant le plus critique (I/O, Cache), il re�oit la plus grosse part de RAM.
-*   **Backend (256M / 0.5 CPU)** : Suffisant pour un runtime Node.js single-threaded traitant des API.
-*   **Frontend (128M / 0.2 CPU)** : Nginx est tr�s l�ger pour servir du statique.
-*   **Backup (64M)** : T�che tr�s ponctuelle et faible en consommation.
+Dans un contexte Cloud/Mutualisé, il est impératif d'isoler les performances pour éviter qu'un service ne sature la machine ("Voisin bruyant").
+
+*   **Database (512M RAM / 1.0 CPU)** : 
+    *   *Pourquoi ?* Une BDD nécessite de charger ses index en RAM pour être performante. C'est le goulot d'étranglement principal de l'architecture.
+*   **Backend (256M RAM / 0.5 CPU)** : 
+    *   *Pourquoi ?* Node.js est efficace mais gourmand en RAM (V8 Engine). Une limite trop basse provoquerait des crashs (OOM Killed). 0.5 CPU suffit car Node est asynchrone single-threaded.
+*   **Frontend (128M RAM / 0.2 CPU)** : 
+    *   *Pourquoi ?* Nginx sert des fichiers statiques ; c'est une opération I/O bound très peu coûteuse en CPU/RAM.
+*   **Backup (64M RAM / 0.2 CPU)** : 
+    *   *Pourquoi ?* Processus éphémère et séquentiel, pas besoin de priorité.
 
 ### Ordre de D�marrage et Healthchecks
 Le syst�me respecte un ordre strict gr�ce � `depends_on` conditionn� par des *Healthchecks* :
@@ -93,6 +106,13 @@ Le syst�me respecte un ordre strict gr�ce � `depends_on` conditionn� par
 Le code du Backend (`server.js`) intercepte le signal `SIGTERM` envoy� par Docker lors d'un arr�t (`docker compose stop`). Cela permet de fermer proprement le serveur HTTP avant de tuer le processus, �vitant de corrompre des requ�tes en cours.
 
 ## 5. Entrypoints
-*   **Backend** : `CMD ["node", "server.js"]` lance directement l'application.
-*   **Backup** : `CMD ["sleep", "infinity"]` permet de garder le conteneur en vie en attente de commandes manuelles (`docker exec`) ou de scripts planifi�s, simulant un "worker" dormant.
+Nous avons mis en place des scripts `entrypoint.sh` pour initialiser l'environnement avant de lancer l'application principale.
+
+*   **Backend** :
+    *   **Script** : Initialise le conteneur, affiche la version de Node.js et vérifie la présence de la variable `DB_HOST` pour le debug.
+    *   **CMD** : `["node", "server.js"]` (passé en argument à l'entrypoint).
+*   **Backup** :
+    *   **Script** : Vérifie que le volume `/backup_data` est bien monté et accessible en écriture avant de démarrer, évitant des erreurs silencieuses lors des sauvegardes.
+    *   **CMD** : `["sleep", "infinity"]` (garde le conteneur en vie).
+
 
