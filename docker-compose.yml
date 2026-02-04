@@ -84,25 +84,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       DB_HOST: db
     volumes:
-      - ./backups_on_host:/backup_data
-    networks:
-      - internal_net
-    depends_on:
-      db:
-        condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: '0.2'
-          memory: 64M
-      dockerfile: Dockerfile
-    container_name: tp_backup
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_HOST: db
-    volumes:
-      - ./backups_on_host:/backup_data # Bind mount pour récupérer les fichiers sur le host
+      - ./backups_on_host:/backup_data 
     networks:
       - internal_net
     depends_on:
@@ -117,7 +99,5 @@ services:
 networks:
   internal_net:
     driver: bridge
-    # Le réseau est "interne" par défaut, seul le front expose un port host.
-
 volumes:
   db_data:

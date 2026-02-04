@@ -1,12 +1,12 @@
 # Architecture du Projet Docker Cloud
 
-Ce document d�taille l'architecture containeris�e mise en place pour le projet Docker Cloud. Il explique les choix techniques, les configurations, et l'orchestration des services.
+Ce document detaille l'architecture containerisee mise en place pour le projet Docker Cloud. Il explique les choix techniques, les configurations, et l'orchestration des services.
 
-## 1. Sch�ma d'Architecture (Flux de Donn�es)
+## 1. Schema d'Architecture (Flux de Donnees)
 
 ```mermaid
 graph TD
-    subgraph Host_Windows ["Machine H�te (Windows)"]
+    subgraph Host_Windows ["Machine Hote (Windows)"]
         User((Utilisateur))
         HostVol["Dossier: ./backups_on_host"]
     end
@@ -33,86 +33,86 @@ graph TD
 
 ## 2. Choix de Build et Personnalisation des Images
 
-Toutes les images utilis�es sont **construites localement** (directive `build` dans docker-compose) et n'utilisent pas directement des images brutes du Docker Hub sans modification.
+Toutes les images utilisees sont **construites localement** (directive `build` dans docker-compose) et n'utilisent pas directement des images brutes du Docker Hub sans modification.
 
 ### A. Arguments de Build (ARG)
-Pour flexibiliser la construction, des arguments `ARG` ont �t� introduits dans chaque Dockerfile. Cela permet de changer la version des bases sans modifier le code.
+Pour flexibiliser la construction, des arguments `ARG` ont ete introduits dans chaque Dockerfile. Cela permet de changer la version des bases sans modifier le code.
 
-| Service | Build Arg | Valeur par d�faut | Description |
+| Service | Build Arg | Valeur par defaut | Description |
 | :--- | :--- | :--- | :--- |
 | **Base** | `DEBIAN_VERSION` | `bullseye-slim` | Version de l'OS Debian minimal |
 | **Backend** | `NODE_VERSION` | `18-slim` | Version du runtime Node.js |
 | **Frontend** | `NGINX_VERSION` | `latest` | Version du serveur Web Nginx |
 | **Database** | `PG_VERSION` | `15` | Version du moteur PostgreSQL |
 
-### B. D�pendances et Op�rations Syst�me
+### B. Dependances et Operations Systeme
 
-Chaque image a �t� enrichie avec des outils sp�cifiques pour l'administration et le debug, justifiant la n�cessit� de cr�er nos propres images.
+Chaque image a ete enrichie avec des outils specifiques pour l'administration et le debug, justifiant la necessite de creer nos propres images.
 
 #### 1. Base Image & Backup Service
 *   **Base (Debian)** : 
-    *   `vim` : Essentiel pour éditer des fichiers de configuration *in situ* lors de debugs d'urgence en production.
-    *   `curl` : Permet de tester les endpoints HTTP internes et la connectivité sortante.
-    *   `tar` : Utilisé pour compresser/décompresser les archives de logs ou de backups.
-*   **Backup** : Utilise `postgresql-client` spécifiquement pour la commande `pg_dump`, standard industriel pour les exports PostgreSQL.
-*   **Nettoyage OS** : La commande `rm -rf /var/lib/apt/lists/*` est cruciale pour alléger l'image finale. Elle supprime les index de paquets téléchargés qui ne sont plus nécessaires après l'installation, réduisant l'empreinte disque sur le registre et l'orchestrateur.
+    *   `vim` : Essentiel pour editer des fichiers de configuration *in situ* lors de debugs d'urgence en production.
+    *   `curl` : Permet de tester les endpoints HTTP internes et la connectivite sortante.
+    *   `tar` : Utilise pour compresser/decompresser les archives de logs ou de backups.
+*   **Backup** : Utilise `postgresql-client` specifiquement pour la commande `pg_dump`, standard industriel pour les exports PostgreSQL.
+*   **Nettoyage OS** : La commande `rm -rf /var/lib/apt/lists/*` est cruciale pour alleger l'image finale. Elle supprime les index de paquets telecharges qui ne sont plus necessaires apres l'installation, reduisant l'empreinte disque sur le registre et l'orchestrateur.
 
 #### 2. Backend (Node.js)
-*   **Outils ajoutés** :
-    *   `iputils-ping` : Indispensable pour diagnostiquer les problèmes de résolution DNS (`ping db`) ou de routage réseau interne entre les conteneurs.
-    *   `curl` : Utilisé par le *Healthcheck* Docker pour valider que l'API répond (200 OK) avant d'envoyer du trafic.
-*   **Sécurité** : Le choix de l'image `slim` évite d'embarquer des centaines de vulnérabilités potentielles présentes dans une image complète.
+*   **Outils ajoutes** :
+    *   `iputils-ping` : Indispensable pour diagnostiquer les problemes de resolution DNS (`ping db`) ou de routage reseau interne entre les conteneurs.
+    *   `curl` : Utilise par le *Healthcheck* Docker pour valider que l'API repond (200 OK) avant d'envoyer du trafic.
+*   **Securite** : Le choix de l'image `slim` evite d'embarquer des centaines de vulnerabilites potentielles presentes dans une image complete.
 
 #### 3. Frontend (Nginx) & Database
-*   **Outils ajoutés** : 
-    *   `procps` (sur la DB) : Fournit `ps` et `top`. Sans cela, il est impossible de surveiller la consommation mémoire réelle d'un processus PostgreSQL qui s'emballerait.
-    *   `vim` : Permet de modifier la configuration Nginx (`nginx.conf`) ou Postgres (`postgresql.conf`) pour tester des optimisations sans devoir reconstruire l'image à chaque essai (hot-debugging).
+*   **Outils ajoutes** : 
+    *   `procps` (sur la DB) : Fournit `ps` et `top`. Sans cela, il est impossible de surveiller la consommation memoire reelle d'un processus PostgreSQL qui s'emballerait.
+    *   `vim` : Permet de modifier la configuration Nginx (`nginx.conf`) ou Postgres (`postgresql.conf`) pour tester des optimisations sans devoir reconstruire l'image a chaque essai (hot-debugging).
 
 ## 3. Configuration et Arguments au Run (ENV)
 
-L'orchestration injecte des variables d'environnement pour configurer le comportement des conteneurs au d�marrage.
+L'orchestration injecte des variables d'environnement pour configurer le comportement des conteneurs au demarrage.
 
-| Service | Variable | Valeur (Exemple) | R�le |
+| Service | Variable | Valeur (Exemple) | Role |
 | :--- | :--- | :--- | :--- |
-| **Database** | `POSTGRES_USER` | `luca` | D�finit le super-admin de la DB |
-| | `POSTGRES_PASSWORD`| `password` | D�finit le mot de passe admin |
-| | `POSTGRES_DB` | `tp_docker` | Cr�e une DB initiale par d�faut |
-| **Backend** | `PORT` | `3000` | Port d'�coute de l'application Node |
-| | `DB_HOST` | `db` | Hostname du service DB (r�solution DNS interne Docker) |
+| **Database** | `POSTGRES_USER` | `luca` | Definit le super-admin de la DB |
+| | `POSTGRES_PASSWORD`| `password` | Definit le mot de passe admin |
+| | `POSTGRES_DB` | `tp_docker` | Cree une DB initiale par defaut |
+| **Backend** | `PORT` | `3000` | Port d'ecoute de l'application Node |
+| | `DB_HOST` | `db` | Hostname du service DB (resolution DNS interne Docker) |
 
 ## 4. Gestion des Ressources et Orchestration
 
-Le fichier `docker-compose.yml` d�finit des contraintes strictes pour simuler un environnement Cloud r�aliste.
+Le fichier `docker-compose.yml` definit des contraintes strictes pour simuler un environnement Cloud realiste.
 
 ### Allocation des Ressources (Limits)
-Dans un contexte Cloud/Mutualisé, il est impératif d'isoler les performances pour éviter qu'un service ne sature la machine ("Voisin bruyant").
+Dans un contexte Cloud/Mutualise, il est imperatif d'isoler les performances pour eviter qu'un service ne sature la machine ("Voisin bruyant").
 
 *   **Database (512M RAM / 1.0 CPU)** : 
-    *   *Pourquoi ?* Une BDD nécessite de charger ses index en RAM pour être performante. C'est le goulot d'étranglement principal de l'architecture.
+    *   *Pourquoi ?* Une BDD necessite de charger ses index en RAM pour etre performante. C'est le goulot d'etranglement principal de l'architecture.
 *   **Backend (256M RAM / 0.5 CPU)** : 
     *   *Pourquoi ?* Node.js est efficace mais gourmand en RAM (V8 Engine). Une limite trop basse provoquerait des crashs (OOM Killed). 0.5 CPU suffit car Node est asynchrone single-threaded.
 *   **Frontend (128M RAM / 0.2 CPU)** : 
-    *   *Pourquoi ?* Nginx sert des fichiers statiques ; c'est une opération I/O bound très peu coûteuse en CPU/RAM.
+    *   *Pourquoi ?* Nginx sert des fichiers statiques ; c'est une operation I/O bound tres peu couteuse en CPU/RAM.
 *   **Backup (64M RAM / 0.2 CPU)** : 
-    *   *Pourquoi ?* Processus éphémère et séquentiel, pas besoin de priorité.
+    *   *Pourquoi ?* Processus ephemere et sequentiel, pas besoin de priorite.
 
-### Ordre de D�marrage et Healthchecks
-Le syst�me respecte un ordre strict gr�ce � `depends_on` conditionn� par des *Healthchecks* :
-1.  **Database** d�marre. Docker attend que `pg_isready` renvoie OK (Service Healthy).
-2.  **Backend** d�marre seulement quand la DB est Healthy.
-3.  **Frontend** d�marre seulement quand le Backend est Healthy.
+### Ordre de Demarrage et Healthchecks
+Le systeme respecte un ordre strict grace a `depends_on` conditionne par des *Healthchecks* :
+1.  **Database** demarre. Docker attend que `pg_isready` renvoie OK (Service Healthy).
+2.  **Backend** demarre seulement quand la DB est Healthy.
+3.  **Frontend** demarre seulement quand le Backend est Healthy.
 
 ### Gestion du SIGTERM (Graceful Shutdown)
-Le code du Backend (`server.js`) intercepte le signal `SIGTERM` envoy� par Docker lors d'un arr�t (`docker compose stop`). Cela permet de fermer proprement le serveur HTTP avant de tuer le processus, �vitant de corrompre des requ�tes en cours.
+Le code du Backend (`server.js`) intercepte le signal `SIGTERM` envoye par Docker lors d'un arret (`docker compose stop`). Cela permet de fermer proprement le serveur HTTP avant de tuer le processus, evitant de corrompre des requetes en cours.
 
 ## 5. Entrypoints
 Nous avons mis en place des scripts `entrypoint.sh` pour initialiser l'environnement avant de lancer l'application principale.
 
 *   **Backend** :
-    *   **Script** : Initialise le conteneur, affiche la version de Node.js et vérifie la présence de la variable `DB_HOST` pour le debug.
-    *   **CMD** : `["node", "server.js"]` (passé en argument à l'entrypoint).
+    *   **Script** : Initialise le conteneur, affiche la version de Node.js et verifie la presence de la variable `DB_HOST` pour le debug.
+    *   **CMD** : `["node", "server.js"]` (passe en argument a l'entrypoint).
 *   **Backup** :
-    *   **Script** : Vérifie que le volume `/backup_data` est bien monté et accessible en écriture avant de démarrer, évitant des erreurs silencieuses lors des sauvegardes.
+    *   **Script** : Verifie que le volume `/backup_data` est bien monte et accessible en ecriture avant de demarrer, evitant des erreurs silencieuses lors des sauvegardes.
     *   **CMD** : `["sleep", "infinity"]` (garde le conteneur en vie).
 
 

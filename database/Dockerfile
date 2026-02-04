@@ -1,3 +1,4 @@
+# Image PostgreSQL customisee avec 'procps' (top) ajoute pour monitorer la consommation RAM/CPU.
 ARG PG_VERSION=15
 FROM postgres:${PG_VERSION}
 

@@ -1,3 +1,4 @@
+# Image Node.js Slim (securite) enrichie avec 'ping' pour verifier la connexion reseau vers la BDD.
 ARG NODE_VERSION=18-slim
 FROM node:${NODE_VERSION}
 

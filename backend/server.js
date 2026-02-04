@@ -16,8 +16,17 @@ const server = app.listen(port, () => {
 
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
+  shutdown();
 });
+
+process.on('SIGINT', () => {
+    console.log('SIGINT signal received (Ctrl+C): closing HTTP server');
+    shutdown();
+});
+
+function shutdown() {
+    server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+    });
+}

@@ -1,3 +1,4 @@
+# Serveur Nginx pour fichiers statiques, avec Vim ajoute pour editer la conf en hot-fix.
 ARG NGINX_VERSION=latest
 FROM nginx:${NGINX_VERSION}
 

@@ -1,3 +1,4 @@
+# Image de base Debian avec outils de debug (vim/curl) et nettoyage des fichiers temporaires pour optimiser la taille.
 ARG DEBIAN_VERSION=bullseye-slim
 FROM debian:${DEBIAN_VERSION}
 
