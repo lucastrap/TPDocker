@@ -4,6 +4,8 @@
 
 L'infrastructure simule un environnement de production complet sur une stack Docker Compose.
 
+![Schema Architecture](Schema_architecture.png)
+
 ## 2. Stratégie de Construction (Build)
 
 Les images ne proviennent pas directement du Hub Docker ("FROM node" direct) mais sont construites via des `Dockerfile` locaux pour garantir la maîtrise de la chaine logicielle et des outils embarqués.
