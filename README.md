@@ -36,7 +36,6 @@ L'injection de configuration se fait exclusivement via variables d'environnement
 | :--- | :--- | :--- |
 | **DB / Backup** | `POSTGRES_USER/DB` | Identifiants et nom de base |
 | **Backend** | `DB_HOST` | Cible de connexion (DNS Docker) |
-| **Global** | `TZ` | Fuseau horaire (si applicable) |
 
 ## 4. Orchestration & Ressources
 
@@ -55,5 +54,13 @@ Utilisation de `depends_on` couplé aux `healthcheck` pour un démarrage séquen
 3.  **Frontend** : Attente statut "Healthy" du Backend.
 
 **Gestion des signaux** : Le backend écoute `SIGTERM` pour fermer proprement le serveur HTTP avant l'arrêt du conteneur (Graceful Shutdown).
+
+## 5. Scripts d'entrée (Entrypoints)
+
+Un script `entrypoint.sh` est utilisé pour valider l'environnement avant le lancement des applicatifs :
+
+*   **Backend** : Vérifie la présence des variables d'environnement (`DB_HOST`) et affiche la version de Node.js pour trace d'exécution.
+*   **Backup** : S'assure que le volume de destination (`/backup_data`) est bien monté et accessible en écriture pour éviter des sauvegardes silencieusement échouées.
+
 
 

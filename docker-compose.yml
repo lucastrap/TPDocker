@@ -83,6 +83,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       DB_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./backups_on_host:/backup_data 
     networks:
